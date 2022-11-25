@@ -6,7 +6,7 @@ It matches on error messages from Bazel, and adds extra information that can hel
 such as golinks to your internal documentation, tell them that a migration is underway with
 additional instructions, or whatever you can think of.
 
-You configure it in an `error_mappings` property in .aspect/cli/plugins.yaml file in your repo, like so:
+Users configure it in an `error_mappings` property in the `.aspect/cli/plugins.yaml` file in their repo, like so:
 
 ```yaml
 - name: augment-error
