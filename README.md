@@ -1,25 +1,23 @@
-# Template for aspect-cli plugins
-
-This repo provides the fastest way to make a plugin for the [aspect cli].
-
-It contains a plugin written in Go, with a GitHub actions CI/CD pipeline to release it.
-
-More details about aspect cli plugins is on the [plugin documentation].
-
-## Instructions
-
-Create a new repo with the green "Use this template" button above.
-Then in your repo...
-
-1. Find-and-replace `hello-world` with your plugin name.
-1. Find-and-replace `github.com/aspect-build/aspect-cli-plugin-template` with the name of your Go module. See <https://go.dev/doc/modules/developing>
-1. Delete everything above the SNIP line below, and start coding on your features!
-
----------- %<  SNIP %< ------------
-
-# My Plugin
+# Augment Error plugin for Aspect CLI
 
 This is a plugin for the Aspect CLI.
+
+It matches on error messages from Bazel, and adds extra information that can help your engineers
+such as golinks to your internal documentation, tell them that a migration is underway with
+additional instructions, or whatever you can think of.
+
+You configure it in an `error_mappings` property in .aspect/cli/plugins.yaml file in your repo, like so:
+
+```yaml
+- name: augment-error
+  properties:
+    error_mappings:
+      demo: this message helps our devs understand failures with the string "demo"
+```
+
+This will print the message when the error contains "demo", like the following:
+
+[![asciicast](https://asciinema.org/a/540385.svg)](https://asciinema.org/a/540385)
 
 ## Developing
 
