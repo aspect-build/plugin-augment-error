@@ -3,10 +3,10 @@
 This is a plugin for the [Aspect CLI](https://aspect.build/cli).
 
 It matches on error messages from Bazel, and adds extra information that can help your engineers
-such as golinks to your internal documentation, tell them that a migration is underway with
+such as go-links to your internal documentation, tell them that a migration is underway with
 additional instructions, or whatever you can think of.
 
-Users configure it in an `error_mappings` property in the `.aspect/cli/config.yaml` file in their repo.
+Users configure it in an `error_mappings` property in the `.aspect/cli/config.yaml` file in their repository.
 
 ## Demo
 
@@ -22,4 +22,4 @@ plugins:
 
 This plugin will print the message when the error contains "demo", like the following:
 
-[![asciicast](https://asciinema.org/a/540385.svg)](https://asciinema.org/a/540385)
+[![Plugin Demo Screencast](https://asciinema.org/a/540385.svg)](https://asciinema.org/a/540385)
