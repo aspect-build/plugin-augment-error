@@ -10,9 +10,11 @@ package main
 
 import (
 	"fmt"
+	"log"
 	"regexp"
 	"strings"
 	"sync"
+	"time"
 
 	goplugin "github.com/hashicorp/go-plugin"
 	"gopkg.in/yaml.v2"
@@ -29,6 +31,7 @@ func main() {
 		hintMap:             map[*regexp.Regexp]string{},
 		yamlUnmarshalStrict: yaml.UnmarshalStrict,
 		helpfulHints:        &helpfulHintSet{nodes: make(map[helpfulHintNode]struct{})},
+		besChan:             make(chan orderedBuildEvent, 100),
 	}))
 }
 
@@ -41,6 +44,15 @@ type ErrorAugmentorPlugin struct {
 	helpfulHintsMutex      sync.Mutex
 	errorMessages          chan string
 	errorMessagesWaitGroup sync.WaitGroup
+
+	besOnce             sync.Once
+	besChan             chan orderedBuildEvent
+	besHandlerWaitGroup sync.WaitGroup
+}
+
+type orderedBuildEvent struct {
+	event          *buildeventstream.BuildEvent
+	sequenceNumber int64
 }
 
 type pluginProperties struct {
@@ -81,6 +93,52 @@ func (plugin *ErrorAugmentorPlugin) Setup(config *aspectplugin.SetupConfig) erro
 }
 
 func (plugin *ErrorAugmentorPlugin) BEPEventCallback(event *buildeventstream.BuildEvent, sequenceNumber int64) error {
+	plugin.besChan <- orderedBuildEvent{event: event, sequenceNumber: sequenceNumber}
+
+	plugin.besOnce.Do(func() {
+		plugin.besHandlerWaitGroup.Add(1)
+		go func() {
+			defer plugin.besHandlerWaitGroup.Done()
+			var nextSn int64 = 1
+			eventBuf := make(map[int64]*buildeventstream.BuildEvent)
+			for o := range plugin.besChan {
+				if o.sequenceNumber == 0 {
+					// Zero is an invalid squence number. Process the event since we can't order it.
+					if err := plugin.BEPEventHandler(o.event); err != nil {
+						log.Printf("error handling build event: %v\n", err)
+					}
+					continue
+				}
+
+				// Check for duplicate sequence numbers
+				if _, exists := eventBuf[o.sequenceNumber]; exists {
+					log.Printf("duplicate sequence number %v\n", o.sequenceNumber)
+					continue
+				}
+
+				// Add the event to the buffer
+				eventBuf[o.sequenceNumber] = o.event
+
+				// Process events in order
+				for {
+					if orderedEvent, exists := eventBuf[nextSn]; exists {
+						if err := plugin.BEPEventHandler(orderedEvent); err != nil {
+							log.Printf("error handling build event: %v\n", err)
+						}
+						delete(eventBuf, nextSn) // Remove processed event
+						nextSn++                 // Move to the next expected sequence
+					} else {
+						break
+					}
+				}
+			}
+		}()
+	})
+
+	return nil
+}
+
+func (plugin *ErrorAugmentorPlugin) BEPEventHandler(event *buildeventstream.BuildEvent) error {
 	aborted := event.GetAborted()
 	if aborted != nil {
 		plugin.errorMessages <- aborted.Description
@@ -152,6 +210,14 @@ func (plugin *ErrorAugmentorPlugin) PostBuildHook(
 	isInteractiveMode bool,
 	promptRunner ioutils.PromptRunner,
 ) error {
+	// Close the build events channel
+	close(plugin.besChan)
+
+	// Wait for all build events to come in
+	if !waitGroupWithTimeout(&plugin.besHandlerWaitGroup, 60*time.Second) {
+		log.Printf("timed out waiting for BES events\n")
+	}
+
 	close(plugin.errorMessages)
 	plugin.errorMessagesWaitGroup.Wait()
 
@@ -170,6 +236,26 @@ func (plugin *ErrorAugmentorPlugin) PostBuildHook(
 
 	plugin.printBreak()
 	return nil
+}
+
+// waitGroupWithTimeout waits for a WaitGroup with a specified timeout.
+func waitGroupWithTimeout(wg *sync.WaitGroup, timeout time.Duration) bool {
+	done := make(chan struct{})
+
+	// Run a goroutine to close the channel when WaitGroup is done
+	go func() {
+		wg.Wait()
+		close(done)
+	}()
+
+	select {
+	case <-done:
+		// WaitGroup finished within timeout
+		return true
+	case <-time.After(timeout):
+		// Timeout occurred
+		return false
+	}
 }
 
 func (plugin *ErrorAugmentorPlugin) printBreak() {
