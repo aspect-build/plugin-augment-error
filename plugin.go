@@ -17,10 +17,10 @@ import (
 	goplugin "github.com/hashicorp/go-plugin"
 	"gopkg.in/yaml.v2"
 
-	"aspect.build/cli/bazel/buildeventstream"
-	"aspect.build/cli/pkg/ioutils"
-	"aspect.build/cli/pkg/plugin/sdk/v1alpha3/config"
-	aspectplugin "aspect.build/cli/pkg/plugin/sdk/v1alpha3/plugin"
+	"github.com/aspect-build/aspect-cli/bazel/buildeventstream"
+	"github.com/aspect-build/aspect-cli/pkg/ioutils"
+	"github.com/aspect-build/aspect-cli/pkg/plugin/sdk/v1alpha4/config"
+	aspectplugin "github.com/aspect-build/aspect-cli/pkg/plugin/sdk/v1alpha4/plugin"
 )
 
 // main starts up the plugin as a child process of the CLI and connects the gRPC communication.
@@ -31,6 +31,7 @@ func main() {
 		helpfulHints:        &helpfulHintSet{nodes: make(map[helpfulHintNode]struct{})},
 	}))
 }
+
 type ErrorAugmentorPlugin struct {
 	aspectplugin.Base
 
@@ -79,7 +80,7 @@ func (plugin *ErrorAugmentorPlugin) Setup(config *aspectplugin.SetupConfig) erro
 	return nil
 }
 
-func (plugin *ErrorAugmentorPlugin) BEPEventCallback(event *buildeventstream.BuildEvent) error {
+func (plugin *ErrorAugmentorPlugin) BEPEventCallback(event *buildeventstream.BuildEvent, sequenceNumber int64) error {
 	aborted := event.GetAborted()
 	if aborted != nil {
 		plugin.errorMessages <- aborted.Description
